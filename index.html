@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>사무실 이전 체크리스트</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: "Malgun Gothic", sans-serif; background: #f3f4f6; margin: 0; padding: 20px; color: #1f2937; }
+  .wrap { max-width: 820px; margin: 0 auto; }
+  h1 { margin: 0 0 4px; font-size: 24px; }
+  .sub { color: #6b7280; font-size: 13px; margin-bottom: 16px; }
+  .card { background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .bar { height: 12px; background: #e5e7eb; border-radius: 6px; overflow: hidden; margin: 8px 0 4px; }
+  .bar > div { height: 100%; background: #2563eb; width: 0; transition: width .2s; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  input[type=text], input[type=date], select { padding: 7px 9px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; font-size: 14px; }
+  input.grow { flex: 1; min-width: 160px; }
+  button { padding: 7px 12px; border: 0; border-radius: 6px; background: #2563eb; color: #fff; font: inherit; font-size: 14px; cursor: pointer; }
+  button.sec { background: #e5e7eb; color: #1f2937; }
+  button.danger { background: #fee2e2; color: #b91c1c; }
+  .cat h2 { font-size: 16px; margin: 0 0 8px; display: flex; justify-content: space-between; }
+  .cat h2 span { font-weight: normal; color: #6b7280; font-size: 13px; }
+  .item { display: flex; gap: 8px; align-items: flex-start; padding: 8px 0; border-top: 1px solid #f0f0f0; }
+  .item input[type=checkbox] { width: 18px; height: 18px; margin-top: 2px; }
+  .item .body { flex: 1; }
+  .item.done .title { text-decoration: line-through; color: #9ca3af; }
+  .meta { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  .meta input { font-size: 12px; padding: 3px 6px; }
+  .meta .memo { flex: 1; min-width: 140px; }
+  .late { color: #b91c1c; font-weight: bold; }
+  .x { background: none; color: #9ca3af; padding: 0 6px; font-size: 18px; }
+  .empty { color: #9ca3af; text-align: center; padding: 20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>사무실 이전 체크리스트</h1>
+  <div class="sub">이전 예정일: <input type="date" id="moveDate"> <span id="dday"></span></div>
+
+  <div class="card">
+    <strong id="pText">0 / 0 완료 (0%)</strong>
+    <div class="bar"><div id="pBar"></div></div>
+  </div>
+
+  <div class="card row">
+    <select id="filter">
+      <option value="all">전체 보기</option>
+      <option value="open">미완료만</option>
+      <option value="done">완료만</option>
+    </select>
+    <select id="ownerFilter"></select>
+    <datalist id="ownerList"></datalist>
+    <input type="text" id="search" class="grow" placeholder="항목/담당자 검색">
+    <button class="sec" id="exportBtn">내보내기</button>
+    <button class="sec" id="importBtn" hidden>가져오기(병합)</button>
+    <input type="file" id="importFile" accept=".json" hidden>
+  </div>
+
+  <div class="card row">
+    <input type="text" id="newTitle" class="grow" placeholder="새 항목 입력">
+    <input type="text" id="newOwner" list="ownerList" placeholder="담당자" size="8">
+    <input type="text" id="newVendor" placeholder="담당업체" size="10">
+    <input type="text" id="newPhone" placeholder="연락처" size="12">
+    <input type="date" id="newDue">
+    <button id="addBtn">추가</button>
+  </div>
+
+  <div id="list"></div>
+
+  <div class="row" style="justify-content:flex-end">
+    <button class="danger" id="resetBtn" hidden>기본 목록으로 초기화</button>
+  </div>
+</div>
+
+<script>
+  const STORAGE_KEY = 'officeMoveChecklist';
+  // 처음 여는 사람에게 보이는 기본 데이터(담당자 배정 포함). 항목 ID는 가져오기(병합)의 기준이다.
+  const SEED = {"moveDate":"","items":[{"id":"mvrglujhz8z8c","cat":"이전 준비 · 계약","title":"원상복구 범위·비용 협의","done":false,"owner":"황태경","vendor":"","phone":"","due":"","memo":"115호 116호 연결문 복구공사 70만원~","updated":1793944389267},{"id":"mvrglujhmb3gb","cat":"이전 준비 · 계약","title":"이전 일정 전 직원 공지","done":false,"owner":"황태경","vendor":"","phone":"","due":"2026-11-15","memo":"공지 완료","updated":1793943875050},{"id":"mvrglujhr5yge","cat":"행정 · 법무","title":"사업자등록증 주소 변경","done":false,"owner":"엄승섭","vendor":"","phone":"","due":"","memo":"","updated":1793152409006},{"id":"mvrglujhvmegr","cat":"행정 · 법무","title":"4대보험 사업장 주소 변경","done":false,"owner":"엄승섭","vendor":"","phone":"","due":"","memo":"","updated":1793152423855},{"id":"mvrglujhc9lwe","cat":"행정 · 법무","title":"거래처·은행·카드사 주소 변경 안내","done":false,"owner":"김서윤","vendor":"","phone":"","due":"","memo":"카드결재 앱 주소변경신고 여부 확인","updated":1793944253340},{"id":"mvrglujhahtzq","cat":"IT · 통신","title":"인터넷·전화 회선 신청 및 개통일 확인","done":false,"owner":"신은선","vendor":"","phone":"","due":"","memo":"2026-12-18까지 약정 중 이날 해지 필요","updated":1793943919973},{"id":"mvrglujhls6qb","cat":"IT · 통신","title":"네트워크 장비·서버 이전 계획","done":false,"owner":"신은선","vendor":"","phone":"","due":"2026-11-18","memo":"이소 네트워크 확인","updated":1793944287882},{"id":"mvrglujhzgsjl","cat":"IT · 통신","title":"복합기·프린터 이전 및 설치","done":false,"owner":"김서윤","vendor":"","phone":"","due":"","memo":"","updated":1793152690112},{"id":"mvrglujhek84z","cat":"IT · 통신","title":"이전 후 네트워크·메일·전화 점검","done":false,"owner":"이정은","vendor":"","phone":"","due":"","memo":"","updated":1793944283298},{"id":"mvrglujh76hu3","cat":"시설 · 인테리어","title":"인테리어 공사 일정 및 준공 확인","done":false,"owner":"황태경","vendor":"","phone":"","due":"","memo":"","updated":1793152513811},{"id":"mvrglujhklo66","cat":"시설 · 인테리어","title":"사무가구 배치도 확정","done":false,"owner":"엄승섭","vendor":"","phone":"","due":"","memo":"","updated":1793152938993},{"id":"mvrglujh93oy0","cat":"시설 · 인테리어","title":"간판·안내 표지 설치","done":false,"owner":"엄승섭","vendor":"","phone":"","due":"","memo":"","updated":1793152839379},{"id":"mvrglujh14uj9","cat":"이삿짐 · 이전 당일","title":"이삿짐 업체 선정 및 견적","done":false,"owner":"신은선","vendor":"","phone":"","due":"2026-11-28","memo":"","updated":1793154379272},{"id":"mvrglujh913ny","cat":"이삿짐 · 이전 당일","title":"박스 포장 및 라벨링(부서별)","done":false,"owner":"이정은","vendor":"","phone":"","due":"","memo":"","updated":1793944164181},{"id":"mvrglujhyxaz7","cat":"이삿짐 · 이전 당일","title":"폐기 물품 정리 및 처리","done":false,"owner":"각자","vendor":"","phone":"","due":"","memo":"","updated":1793152966392},{"id":"mvrglujhfvhvz","cat":"이삿짐 · 이전 당일","title":"이전 후 분실·파손 확인","done":false,"owner":"이정은","vendor":"","phone":"","due":"","memo":"","updated":1793944293034},{"id":"mvrglujhaoqgx","cat":"이전 후 마무리","title":"우편물·택배 주소 변경 확인","done":false,"owner":"김서윤","vendor":"","phone":"","due":"","memo":"","updated":1793152748545},{"id":"mvrglujh85wqd","cat":"이전 후 마무리","title":"명함·홈페이지·이메일 서명 주소 변경","done":false,"owner":"황태경","vendor":"","phone":"","due":"","memo":"명함 재제작, 홈페이지 수정,","updated":1793944048897}]};
+
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const IS_ADMIN = location.hash === '#admin';
+  const initialState = () => JSON.parse(JSON.stringify(SEED));
+  let state = load();
+
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      if (s && Array.isArray(s.items)) return s;
+    } catch (e) {}
+    return initialState();
+  }
+  function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); render(); }
+  function touch(it) { it.updated = Date.now(); }
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const today = () => new Date().toISOString().slice(0, 10);
+
+  const NO_OWNER = '담당자 미지정';
+  const ownerOf = i => (i.owner || '').trim() || NO_OWNER;
+  function ownerNames() {
+    return [...new Set(state.items.map(i => (i.owner || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'));
+  }
+
+  function render() {
+    // 진행률
+    const total = state.items.length, done = state.items.filter(i => i.done).length;
+    const pct = total ? Math.round(done / total * 100) : 0;
+    document.getElementById('pText').textContent = `${done} / ${total} 완료 (${pct}%)`;
+    document.getElementById('pBar').style.width = pct + '%';
+
+    // D-day
+    const md = document.getElementById('moveDate');
+    md.value = state.moveDate;
+    const dd = document.getElementById('dday');
+    if (state.moveDate) {
+      const diff = Math.round((new Date(state.moveDate) - new Date(today())) / 86400000);
+      dd.textContent = diff > 0 ? `D-${diff}` : diff === 0 ? 'D-Day' : `D+${-diff} (경과)`;
+    } else dd.textContent = '';
+
+    // 담당자 목록 (자동완성 + 담당자 필터)
+    const owners = ownerNames();
+    document.getElementById('ownerList').innerHTML = owners.map(o => `<option value="${esc(o)}">`).join('');
+    const of = document.getElementById('ownerFilter');
+    const prevOwner = of.value;
+    of.innerHTML = '<option value="__all">전체 담당자</option>' + owners.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('') +
+      `<option value="${NO_OWNER}">${NO_OWNER}</option>`;
+    of.value = [...of.options].some(o => o.value === prevOwner) ? prevOwner : '__all';
+
+    // 목록: 담당자별로 묶어서 표시
+    const f = document.getElementById('filter').value;
+    const q = document.getElementById('search').value.trim().toLowerCase();
+    const match = i => (f === 'all' || (f === 'done') === i.done) &&
+      (!q || (i.title + i.owner + (i.vendor || '') + (i.phone || '') + i.memo).toLowerCase().includes(q));
+    let html = '';
+    for (const c of [...owners, NO_OWNER]) {
+      if (of.value !== '__all' && of.value !== c) continue;
+      const all = state.items.filter(i => ownerOf(i) === c);
+      const shown = all.filter(match);
+      if (!shown.length) continue;
+      html += `<div class="card cat"><h2>${esc(c)}<span>${all.filter(i => i.done).length}/${all.length} 완료</span></h2>` +
+        shown.map(i => `
+        <div class="item ${i.done ? 'done' : ''}">
+          <input type="checkbox" ${i.done ? 'checked' : ''} onchange="toggle('${i.id}')">
+          <div class="body">
+            <div class="title">${esc(i.title)}</div>
+            <div class="meta">
+              <input type="text" list="ownerList" placeholder="담당자" size="8" value="${esc(i.owner)}" onchange="setField('${i.id}','owner',this.value)">
+              <input type="text" placeholder="담당업체" size="10" value="${esc(i.vendor || '')}" onchange="setField('${i.id}','vendor',this.value)">
+              <input type="text" placeholder="연락처" size="12" value="${esc(i.phone || '')}" onchange="setField('${i.id}','phone',this.value)">
+              <input type="date" value="${i.due}" onchange="setField('${i.id}','due',this.value)">
+              <input type="text" class="memo" placeholder="메모" value="${esc(i.memo)}" onchange="setField('${i.id}','memo',this.value)">
+              ${!i.done && i.due && i.due < today() ? '<span class="late">기한 초과</span>' : ''}
+            </div>
+          </div>
+          <button class="x" title="삭제" onclick="removeItem('${i.id}')">×</button>
+        </div>`).join('') + '</div>';
+    }
+    document.getElementById('list').innerHTML = html || '<div class="card empty">표시할 항목이 없습니다.</div>';
+  }
+
+  function toggle(id) { const i = state.items.find(x => x.id === id); i.done = !i.done; touch(i); save(); }
+  function setField(id, k, v) { const i = state.items.find(x => x.id === id); i[k] = k === 'owner' ? v.trim() : v; touch(i); save(); }
+  function removeItem(id) {
+    if (!confirm('이 항목을 삭제할까요?')) return;
+    state.items = state.items.filter(x => x.id !== id); save();
+  }
+
+  document.getElementById('moveDate').onchange = e => { state.moveDate = e.target.value; save(); };
+  document.getElementById('filter').onchange = render;
+  document.getElementById('ownerFilter').onchange = render;
+  document.getElementById('search').oninput = render;
+
+  document.getElementById('addBtn').onclick = () => {
+    const title = document.getElementById('newTitle').value.trim();
+    if (!title) return;
+    state.items.push({ id: uid(), cat: '', title, done: false, owner: document.getElementById('newOwner').value.trim(),
+      vendor: document.getElementById('newVendor').value.trim(), phone: document.getElementById('newPhone').value.trim(),
+      due: document.getElementById('newDue').value, memo: '', updated: Date.now() });
+    ['newTitle', 'newOwner', 'newVendor', 'newPhone', 'newDue'].forEach(id => document.getElementById(id).value = '');
+    save();
+  };
+  document.getElementById('newTitle').onkeydown = e => { if (e.key === 'Enter') document.getElementById('addBtn').click(); };
+
+  document.getElementById('resetBtn').onclick = () => {
+    if (confirm('모든 입력 내용이 지워지고 처음 배포한 상태로 돌아갑니다. 계속할까요?')) {
+      state = initialState(); save();
+    }
+  };
+
+  // 내보내기 / 가져오기(병합): 같은 항목은 수정 시각이 더 최근인 쪽을 채택
+  document.getElementById('exportBtn').onclick = () => {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `사무실이전_체크리스트_${today()}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  // 가져오기는 주소 끝에 #admin 을 붙여 연 관리자 화면에서만 보인다
+  if (IS_ADMIN) {
+    document.getElementById('importBtn').hidden = false;
+    document.getElementById('resetBtn').hidden = false;
+  }
+  document.getElementById('importBtn').onclick =() => document.getElementById('importFile').click();
+  document.getElementById('importFile').onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const data = JSON.parse(r.result);
+        if (!Array.isArray(data.items)) throw new Error();
+        let added = 0, updated = 0;
+        for (const inc of data.items) {
+          const cur = state.items.find(x => x.id === inc.id);
+          if (!cur) { state.items.push(inc); added++; }
+          else if ((inc.updated || 0) > (cur.updated || 0)) { Object.assign(cur, inc); updated++; }
+        }
+        if (!state.moveDate && data.moveDate) state.moveDate = data.moveDate;
+        save();
+        alert(`가져오기 완료: 추가 ${added}건, 갱신 ${updated}건`);
+      } catch (err) { alert('올바른 체크리스트 파일이 아닙니다.'); }
+    };
+    r.readAsText(file);
+    e.target.value = '';
+  };
+
+  render();
+</script>
+</body>
+</html>
