@@ -68,6 +68,9 @@
 
   <div id="list"></div>
 
+  <div class="row" style="justify-content:flex-end">
+    <button class="danger" id="resetBtn" hidden>기본 목록으로 초기화</button>
+  </div>
 </div>
 
 <script>
@@ -209,6 +212,12 @@
   };
   document.getElementById('newTitle').onkeydown = e => { if (e.key === 'Enter') document.getElementById('addBtn').click(); };
 
+  document.getElementById('resetBtn').onclick = () => {
+    if (confirm('모든 입력 내용이 지워지고 처음 배포한 상태로 돌아갑니다. 계속할까요?')) {
+      state = initialState(); save();
+    }
+  };
+
   // 내보내기 / 가져오기(병합): 같은 항목은 수정 시각이 더 최근인 쪽을 채택
   document.getElementById('exportBtn').onclick = () => {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
@@ -219,7 +228,10 @@
     URL.revokeObjectURL(a.href);
   };
   // 가져오기는 주소 끝에 #admin 을 붙여 연 관리자 화면에서만 보인다
-  if (IS_ADMIN) document.getElementById('importBtn').hidden = false;
+  if (IS_ADMIN) {
+    document.getElementById('importBtn').hidden = false;
+    document.getElementById('resetBtn').hidden = false;
+  }
   document.getElementById('importBtn').onclick =() => document.getElementById('importFile').click();
   document.getElementById('importFile').onchange = e => {
     const file = e.target.files[0];
