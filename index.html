@@ -36,7 +36,7 @@
 <body>
 <div class="wrap">
   <h1>사무실 이전 체크리스트</h1>
-  <div class="sub">이전 예정일: <input type="date" id="moveDate"> <span id="dday"></span></div>
+  <div class="sub">이전 예정일: <input type="date" id="moveDate"> <span id="dday"></span> <span id="syncState" style="margin-left:12px"></span></div>
 
   <div class="card">
     <strong id="pText">0 / 0 완료 (0%)</strong>
@@ -68,13 +68,12 @@
 
   <div id="list"></div>
 
-  <div class="row" style="justify-content:flex-end">
-    <button class="danger" id="resetBtn" hidden>기본 목록으로 초기화</button>
-  </div>
 </div>
 
 <script>
   const STORAGE_KEY = 'officeMoveChecklist';
+  // Google Apps Script 웹 앱 주소(server/Code.gs 배포 후 입력). 비어 있으면 서버 없이 data.json만 읽는다.
+  const API_URL = 'https://script.google.com/macros/s/AKfycbwaDq3DRcSYcVOOx-ehQk5uf9Iu5SSKUXVQVz-JjzHs2xaupg6yjxIusittjNuAhXbr8w/exec';
   // 처음 여는 사람에게 보이는 기본 데이터(담당자 배정 포함). 항목 ID는 가져오기(병합)의 기준이다.
   const SEED = {"moveDate":"","items":[{"id":"mvrglujhz8z8c","cat":"이전 준비 · 계약","title":"원상복구 범위·비용 협의","done":false,"owner":"황태경","vendor":"","phone":"","due":"","memo":"115호 116호 연결문 복구공사 70만원~","updated":1793944389267},{"id":"mvrglujhmb3gb","cat":"이전 준비 · 계약","title":"이전 일정 전 직원 공지","done":false,"owner":"황태경","vendor":"","phone":"","due":"2026-11-15","memo":"공지 완료","updated":1793943875050},{"id":"mvrglujhr5yge","cat":"행정 · 법무","title":"사업자등록증 주소 변경","done":false,"owner":"엄승섭","vendor":"","phone":"","due":"","memo":"","updated":1793152409006},{"id":"mvrglujhvmegr","cat":"행정 · 법무","title":"4대보험 사업장 주소 변경","done":false,"owner":"엄승섭","vendor":"","phone":"","due":"","memo":"","updated":1793152423855},{"id":"mvrglujhc9lwe","cat":"행정 · 법무","title":"거래처·은행·카드사 주소 변경 안내","done":false,"owner":"김서윤","vendor":"","phone":"","due":"","memo":"카드결재 앱 주소변경신고 여부 확인","updated":1793944253340},{"id":"mvrglujhahtzq","cat":"IT · 통신","title":"인터넷·전화 회선 신청 및 개통일 확인","done":false,"owner":"신은선","vendor":"","phone":"","due":"","memo":"2026-12-18까지 약정 중 이날 해지 필요","updated":1793943919973},{"id":"mvrglujhls6qb","cat":"IT · 통신","title":"네트워크 장비·서버 이전 계획","done":false,"owner":"신은선","vendor":"","phone":"","due":"2026-11-18","memo":"이소 네트워크 확인","updated":1793944287882},{"id":"mvrglujhzgsjl","cat":"IT · 통신","title":"복합기·프린터 이전 및 설치","done":false,"owner":"김서윤","vendor":"","phone":"","due":"","memo":"","updated":1793152690112},{"id":"mvrglujhek84z","cat":"IT · 통신","title":"이전 후 네트워크·메일·전화 점검","done":false,"owner":"이정은","vendor":"","phone":"","due":"","memo":"","updated":1793944283298},{"id":"mvrglujh76hu3","cat":"시설 · 인테리어","title":"인테리어 공사 일정 및 준공 확인","done":false,"owner":"황태경","vendor":"","phone":"","due":"","memo":"","updated":1793152513811},{"id":"mvrglujhklo66","cat":"시설 · 인테리어","title":"사무가구 배치도 확정","done":false,"owner":"엄승섭","vendor":"","phone":"","due":"","memo":"","updated":1793152938993},{"id":"mvrglujh93oy0","cat":"시설 · 인테리어","title":"간판·안내 표지 설치","done":false,"owner":"엄승섭","vendor":"","phone":"","due":"","memo":"","updated":1793152839379},{"id":"mvrglujh14uj9","cat":"이삿짐 · 이전 당일","title":"이삿짐 업체 선정 및 견적","done":false,"owner":"신은선","vendor":"","phone":"","due":"2026-11-28","memo":"","updated":1793154379272},{"id":"mvrglujh913ny","cat":"이삿짐 · 이전 당일","title":"박스 포장 및 라벨링(부서별)","done":false,"owner":"이정은","vendor":"","phone":"","due":"","memo":"","updated":1793944164181},{"id":"mvrglujhyxaz7","cat":"이삿짐 · 이전 당일","title":"폐기 물품 정리 및 처리","done":false,"owner":"각자","vendor":"","phone":"","due":"","memo":"","updated":1793152966392},{"id":"mvrglujhfvhvz","cat":"이삿짐 · 이전 당일","title":"이전 후 분실·파손 확인","done":false,"owner":"이정은","vendor":"","phone":"","due":"","memo":"","updated":1793944293034},{"id":"mvrglujhaoqgx","cat":"이전 후 마무리","title":"우편물·택배 주소 변경 확인","done":false,"owner":"김서윤","vendor":"","phone":"","due":"","memo":"","updated":1793152748545},{"id":"mvrglujh85wqd","cat":"이전 후 마무리","title":"명함·홈페이지·이메일 서명 주소 변경","done":false,"owner":"황태경","vendor":"","phone":"","due":"","memo":"명함 재제작, 홈페이지 수정,","updated":1793944048897}]};
 
@@ -90,7 +89,8 @@
     } catch (e) {}
     return initialState();
   }
-  function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); render(); }
+  function persist() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); render(); }
+  function save() { persist(); scheduleSync(); }
   function touch(it) { it.updated = Date.now(); }
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const today = () => new Date().toISOString().slice(0, 10);
@@ -171,7 +171,10 @@
     }
     const before = state.items.length;
     state.items = state.items.filter(x => !state.removed.includes(x.id));
-    if (!state.moveDate && data.moveDate) state.moveDate = data.moveDate;
+    if ((data.moveDateUpdated || 0) > (state.moveDateUpdated || 0)) {
+      state.moveDate = data.moveDate || '';
+      state.moveDateUpdated = data.moveDateUpdated;
+    } else if (!state.moveDate && data.moveDate) state.moveDate = data.moveDate;
     return { added, updated, removed: before - state.items.length };
   }
 
@@ -187,6 +190,40 @@
     } catch (e) {}
   }
 
+  // 서버 동기화: 내 전체 항목을 보내고, 서버가 합친 결과를 받아 반영한다
+  let syncTimer, syncing = false;
+  const setSyncState = t => { document.getElementById('syncState').textContent = t; };
+  function scheduleSync() { if (!API_URL) return; clearTimeout(syncTimer); syncTimer = setTimeout(syncServer, 800); }
+  async function syncServer() {
+    if (!API_URL || syncing) return;
+    syncing = true;
+    setSyncState('동기화 중…');
+    try {
+      const r = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ items: state.items, removed: state.removed || [], moveDate: state.moveDate, moveDateUpdated: state.moveDateUpdated || 0 })
+      });
+      const data = await r.json();
+      if (!Array.isArray(data.items)) throw new Error('bad response');
+      // 입력 중인 칸이 있으면 화면이 깜빡이며 입력이 끊기므로, 이번 응답은 건너뛰고 다음에 반영한다
+      const a = document.activeElement;
+      if (!(a && a.closest && a.closest('#list'))) {
+        mergeData(data);
+        persist();
+      }
+      setSyncState('동기화됨 ' + new Date().toTimeString().slice(0, 5));
+    } catch (e) {
+      setSyncState('오프라인 (이 기기에 저장됨, 연결되면 자동 전송)');
+    } finally { syncing = false; }
+  }
+  function startSync() {
+    if (!API_URL) { syncPublished(); return; }
+    syncServer();
+    setInterval(() => { if (!document.hidden) syncServer(); }, 20000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) syncServer(); });
+  }
+
   function toggle(id) { const i = state.items.find(x => x.id === id); i.done = !i.done; touch(i); save(); }
   function setField(id, k, v) { const i = state.items.find(x => x.id === id); i[k] = k === 'owner' ? v.trim() : v; touch(i); save(); }
   function removeItem(id) {
@@ -196,7 +233,7 @@
     save();
   }
 
-  document.getElementById('moveDate').onchange = e => { state.moveDate = e.target.value; save(); };
+  document.getElementById('moveDate').onchange = e => { state.moveDate = e.target.value; state.moveDateUpdated = Date.now(); save(); };
   document.getElementById('filter').onchange = render;
   document.getElementById('ownerFilter').onchange = render;
   document.getElementById('search').oninput = render;
@@ -212,12 +249,6 @@
   };
   document.getElementById('newTitle').onkeydown = e => { if (e.key === 'Enter') document.getElementById('addBtn').click(); };
 
-  document.getElementById('resetBtn').onclick = () => {
-    if (confirm('모든 입력 내용이 지워지고 처음 배포한 상태로 돌아갑니다. 계속할까요?')) {
-      state = initialState(); save();
-    }
-  };
-
   // 내보내기 / 가져오기(병합): 같은 항목은 수정 시각이 더 최근인 쪽을 채택
   document.getElementById('exportBtn').onclick = () => {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
@@ -228,10 +259,7 @@
     URL.revokeObjectURL(a.href);
   };
   // 가져오기는 주소 끝에 #admin 을 붙여 연 관리자 화면에서만 보인다
-  if (IS_ADMIN) {
-    document.getElementById('importBtn').hidden = false;
-    document.getElementById('resetBtn').hidden = false;
-  }
+  if (IS_ADMIN) document.getElementById('importBtn').hidden = false;
   document.getElementById('importBtn').onclick =() => document.getElementById('importFile').click();
   document.getElementById('importFile').onchange = e => {
     const file = e.target.files[0];
@@ -251,7 +279,7 @@
   };
 
   render();
-  syncPublished();
+  startSync();
 </script>
 </body>
 </html>
