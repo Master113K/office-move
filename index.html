@@ -158,11 +158,42 @@
     document.getElementById('list').innerHTML = html || '<div class="card empty">표시할 항목이 없습니다.</div>';
   }
 
+  // 다른 데이터(가져온 파일, 배포된 data.json)를 합친다: 같은 항목은 수정 시각이 더 최근인 쪽을 채택하고,
+  // 삭제된 항목(removed)은 양쪽 목록을 합쳐 모두 제거한다
+  function mergeData(data) {
+    let added = 0, updated = 0;
+    state.removed = [...new Set([...(state.removed || []), ...(data.removed || [])])];
+    for (const inc of data.items) {
+      if (state.removed.includes(inc.id)) continue;
+      const cur = state.items.find(x => x.id === inc.id);
+      if (!cur) { state.items.push(inc); added++; }
+      else if ((inc.updated || 0) > (cur.updated || 0)) { Object.assign(cur, inc); updated++; }
+    }
+    const before = state.items.length;
+    state.items = state.items.filter(x => !state.removed.includes(x.id));
+    if (!state.moveDate && data.moveDate) state.moveDate = data.moveDate;
+    return { added, updated, removed: before - state.items.length };
+  }
+
+  // 관리자가 올린 최신 data.json을 열 때마다 가져와 합친다 (파일이 없거나 오프라인이면 무시)
+  async function syncPublished() {
+    try {
+      const r = await fetch('data.json?t=' + Date.now(), { cache: 'no-store' });
+      if (!r.ok) return;
+      const data = await r.json();
+      if (!Array.isArray(data.items)) return;
+      const res = mergeData(data);
+      if (res.added || res.updated || res.removed) save();
+    } catch (e) {}
+  }
+
   function toggle(id) { const i = state.items.find(x => x.id === id); i.done = !i.done; touch(i); save(); }
   function setField(id, k, v) { const i = state.items.find(x => x.id === id); i[k] = k === 'owner' ? v.trim() : v; touch(i); save(); }
   function removeItem(id) {
     if (!confirm('이 항목을 삭제할까요?')) return;
-    state.items = state.items.filter(x => x.id !== id); save();
+    state.items = state.items.filter(x => x.id !== id);
+    state.removed = [...(state.removed || []), id];
+    save();
   }
 
   document.getElementById('moveDate').onchange = e => { state.moveDate = e.target.value; save(); };
@@ -210,13 +241,7 @@
       try {
         const data = JSON.parse(r.result);
         if (!Array.isArray(data.items)) throw new Error();
-        let added = 0, updated = 0;
-        for (const inc of data.items) {
-          const cur = state.items.find(x => x.id === inc.id);
-          if (!cur) { state.items.push(inc); added++; }
-          else if ((inc.updated || 0) > (cur.updated || 0)) { Object.assign(cur, inc); updated++; }
-        }
-        if (!state.moveDate && data.moveDate) state.moveDate = data.moveDate;
+        const { added, updated } = mergeData(data);
         save();
         alert(`가져오기 완료: 추가 ${added}건, 갱신 ${updated}건`);
       } catch (err) { alert('올바른 체크리스트 파일이 아닙니다.'); }
@@ -226,6 +251,7 @@
   };
 
   render();
+  syncPublished();
 </script>
 </body>
 </html>
