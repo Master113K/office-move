@@ -191,11 +191,12 @@
   }
 
   // 서버 동기화: 내 전체 항목을 보내고, 서버가 합친 결과를 받아 반영한다
-  let syncTimer, syncing = false;
+  let syncTimer, syncing = false, syncAgain = false;
   const setSyncState = t => { document.getElementById('syncState').textContent = t; };
   function scheduleSync() { if (!API_URL) return; clearTimeout(syncTimer); syncTimer = setTimeout(syncServer, 800); }
   async function syncServer() {
-    if (!API_URL || syncing) return;
+    if (!API_URL) return;
+    if (syncing) { syncAgain = true; return; }  // 전송 중에 바뀐 내용은 끝난 뒤 한 번 더 보낸다
     syncing = true;
     setSyncState('동기화 중…');
     try {
@@ -215,7 +216,10 @@
       setSyncState('동기화됨 ' + new Date().toTimeString().slice(0, 5));
     } catch (e) {
       setSyncState('오프라인 (이 기기에 저장됨, 연결되면 자동 전송)');
-    } finally { syncing = false; }
+    } finally {
+      syncing = false;
+      if (syncAgain) { syncAgain = false; syncServer(); }
+    }
   }
   function startSync() {
     if (!API_URL) { syncPublished(); return; }
